@@ -2,6 +2,22 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 开发工作流
+
+**本项目通过 Forge 引擎管理，走 GSD + gstack 流水线**：
+
+```bash
+# 恢复项目（当前：第 1/5 阶段 — 脚手架与基础 UI）
+/forge resume cc工作流自动化优化
+
+# 查看项目状态
+/forge:status
+```
+
+- GSD 负责规划和执行（`/gsd:plan-phase`、`/gsd:execute-phase`）
+- gstack 负责代码审查和质量门（`/review`、`/qa`、`/ship`）
+- 不要在 Forge 流水线外直接修改代码，除非是快速小修（< 50 行）
+
 ## 运行测试
 
 ```bash
