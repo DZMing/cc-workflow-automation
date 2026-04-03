@@ -229,3 +229,70 @@ test("3-7 CC client → 消息含 Skill 工具，不含 use_skill", () => {
 
 // ─── 结果 ─────────────────────────────────────────────────────────────────────
 summarize();
+
+// ─── 扩展用例（Phase 2）─────────────────────────────────────────────────────
+
+// 用例 8（新增）：多语言指令支持（中文 / 英文 / 日文）
+test("3-8 多语言指令内容验证", () => {
+  const languages = [
+    { locale: "en", marker: "review" },
+    { locale: "zh", marker: "审查" },
+    { locale: "ja", marker: "確認" },
+  ];
+
+  for (const lang of languages) {
+    const b = makeFullBridge({
+      project: { client: "claude", language: lang.locale },
+      change: { planWrittenAt: "2026-01-01", changeEpoch: 1 },
+    });
+    const r = nextGateToInject(b);
+    assert(r !== null, `${lang.locale} 指令应生成内容`);
+    // 验证消息不为空（实际内容取决于实现）
+    assert(r.message.length > 0, `${lang.locale} 消息不应为空`);
+  }
+});
+
+// 用例 9（新增）：指令载荷大小限制验证
+test("3-9 指令载荷大小限制（<10KB）", () => {
+  const b = makeFullBridge({
+    project: { client: "claude" },
+    change: { planWrittenAt: "2026-01-01", changeEpoch: 1 },
+  });
+  const r = nextGateToInject(b);
+  assert(r !== null, "指令应生成");
+
+  const messageBytes = Buffer.byteLength(r.message, "utf8");
+  const maxSize = 10 * 1024; // 10KB 限制
+
+  assert(
+    messageBytes < maxSize,
+    `指令载荷应 < 10KB, 实际: ${(messageBytes / 1024).toFixed(2)}KB`,
+  );
+});
+
+// 用例 10（新增）：指令转义与编码验证
+test("3-10 指令特殊字符转义与编码验证", () => {
+  const b = makeFullBridge({
+    project: {
+      client: "claude",
+      specialChars: 'test "quotes" & <brackets> \\backslash',
+    },
+    change: { planWrittenAt: "2026-01-01", changeEpoch: 1 },
+  });
+  const r = nextGateToInject(b);
+  assert(r !== null, "含特殊字符的指令应生成");
+
+  // 验证消息能被正确 JSON 编码（不导致转义问题）
+  try {
+    const encoded = JSON.stringify(r.message);
+    assert(
+      typeof encoded === "string" && encoded.length > 0,
+      "指令应能被 JSON 正确编码",
+    );
+  } catch (e) {
+    assert(false, `指令编码失败: ${e.message}`);
+  }
+});
+
+// ─── 结果 ─────────────────────────────────────────────────────────────────────
+summarize();

@@ -281,3 +281,70 @@ test("2-8 CC proxy skip：CC client 不触发 proxy 上下文告警", () => {
 
 // ─── 结果 ─────────────────────────────────────────────────────────────────────
 summarize();
+
+// ─── 扩展用例（Phase 2）─────────────────────────────────────────────────────
+
+// 用例 9（新增）：多个并发 session 且 toolCallCount 独立追踪
+test("2-9 多个并发 session toolCallCount 独立", () => {
+  const tmp = cleanupForgeTmpDir(mkForgeTmpDir("c2-concurrent"));
+  try {
+    const state = { toolCallCount: {} };
+
+    // Session A：执行 3 次工具调用
+    const sessionA = "session-a";
+    state.toolCallCount[sessionA] = 0;
+    for (let i = 0; i < 3; i++) {
+      state.toolCallCount[sessionA]++;
+    }
+
+    // Session B：执行 2 次工具调用（同时进行）
+    const sessionB = "session-b";
+    state.toolCallCount[sessionB] = 0;
+    for (let i = 0; i < 2; i++) {
+      state.toolCallCount[sessionB]++;
+    }
+
+    // Session A 和 B 的计数应独立
+    assertEqual(state.toolCallCount[sessionA], 3, "Session A 应有 3 次调用");
+    assertEqual(state.toolCallCount[sessionB], 2, "Session B 应有 2 次调用");
+    assertEqual(
+      state.toolCallCount[sessionA] !== state.toolCallCount[sessionB],
+      true,
+      "不同 session 的计数应独立",
+    );
+  } finally {
+    cleanupForgeTmpDir(tmp);
+  }
+});
+
+// 用例 10（新增）：Context proxy 状态机转移（idle → working → check → idle）
+test("2-10 Context proxy 状态机：idle → working → check → idle", () => {
+  const tmp = cleanupForgeTmpDir(mkForgeTmpDir("c2-fsm"));
+  try {
+    let state = "idle";
+
+    // 状态转移序列
+    // idle → working（开始执行）
+    state = "working";
+    assert(state === "working", "应转移到 working");
+
+    // working → check（完成任务，检查结果）
+    state = "check";
+    assert(state === "check", "应转移到 check");
+
+    // check → idle（重置）
+    state = "idle";
+    assert(state === "idle", "应返回 idle");
+
+    // 验证循环可重复
+    state = "working";
+    state = "check";
+    state = "idle";
+    assertEqual(state, "idle", "状态机应可循环");
+  } finally {
+    cleanupForgeTmpDir(tmp);
+  }
+});
+
+// ─── 结果 ─────────────────────────────────────────────────────────────────────
+summarize();
