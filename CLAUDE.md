@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **本项目通过 Forge 引擎管理，走 GSD + gstack 流水线**：
 
 ```bash
-# 恢复项目（当前：第 1/5 阶段 — 脚手架与基础 UI）
+# 恢复项目（当前：第 5/5 阶段 — 已完成 ✅）
 /forge resume cc工作流自动化优化
 
 # 查看项目状态

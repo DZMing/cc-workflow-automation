@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// test-c3-instruction-strings.js — C3: OC client 路径 — 6 门消息均使用 use_skill，无 Skill( 调用（6 用例）
+// test-c3-instruction-strings.js — C3: OC client 路径 — 6 门消息均使用 use_skill，无 Skill( 调用（10 用例）
 "use strict";
 
 const path = require("path");
@@ -104,7 +104,7 @@ test("3-1 plan_review 消息含 use_skill 和 autoplan", () => {
   assert(r !== null, "plan_review 应触发注入");
   assertEqual(r.name, "plan_review", `name 应为 plan_review, got ${r.name}`);
   assert(
-    r.message.includes("use_skill"),
+    /\buse_skill\b/.test(r.message),
     `消息应含 use_skill: ${r.message.slice(0, 120)}`,
   );
   assert(r.message.toLowerCase().includes("autoplan"), `消息应含 autoplan`);
@@ -120,7 +120,7 @@ test("3-2 code_review 消息含 use_skill 和 review", () => {
   const r = nextGateToInject(b);
   assert(r !== null, "code_review 应触发注入");
   assertEqual(r.name, "code_review", `name 应为 code_review, got ${r.name}`);
-  assert(r.message.includes("use_skill"), `消息应含 use_skill`);
+  assert(/\buse_skill\b/.test(r.message), `消息应含 use_skill`);
   assert(r.message.toLowerCase().includes("review"), `消息应含 review`);
 });
 
@@ -137,7 +137,7 @@ test("3-3 qa 消息含 use_skill 和 qa", () => {
   const r = nextGateToInject(b);
   assert(r !== null, "qa 应触发注入");
   assertEqual(r.name, "qa", `name 应为 qa, got ${r.name}`);
-  assert(r.message.includes("use_skill"), `消息应含 use_skill`);
+  assert(/\buse_skill\b/.test(r.message), `消息应含 use_skill`);
   assert(r.message.toLowerCase().includes("qa"), `消息应含 qa`);
 });
 
@@ -154,7 +154,7 @@ test("3-4 security 消息含 use_skill 和 cso", () => {
   const r = nextGateToInject(b);
   assert(r !== null, "security 应触发注入");
   assertEqual(r.name, "security", `name 应为 security, got ${r.name}`);
-  assert(r.message.includes("use_skill"), `消息应含 use_skill`);
+  assert(/\buse_skill\b/.test(r.message), `消息应含 use_skill`);
   assert(r.message.toLowerCase().includes("cso"), `消息应含 cso`);
 });
 
@@ -173,7 +173,7 @@ test("3-5 benchmark 消息含 use_skill 和 benchmark", () => {
   const r = nextGateToInject(b);
   assert(r !== null, "benchmark 应触发注入");
   assertEqual(r.name, "benchmark", `name 应为 benchmark, got ${r.name}`);
-  assert(r.message.includes("use_skill"), `消息应含 use_skill`);
+  assert(/\buse_skill\b/.test(r.message), `消息应含 use_skill`);
   assert(r.message.toLowerCase().includes("benchmark"), `消息应含 benchmark`);
 });
 
@@ -191,7 +191,7 @@ test("3-6 ship 消息含 use_skill/ship；全部门消息无 Skill(", () => {
   const r = nextGateToInject(b);
   assert(r !== null, "ship 应触发注入");
   assertEqual(r.name, "ship", `name 应为 ship, got ${r.name}`);
-  assert(r.message.includes("use_skill"), `消息应含 use_skill`);
+  assert(/\buse_skill\b/.test(r.message), `消息应含 use_skill`);
   assert(r.message.toLowerCase().includes("ship"), `消息应含 ship`);
 
   // O3 修复：=== 6 精确断言，丢任意一门都会失败（原 >= 1 太弱）
@@ -203,7 +203,7 @@ test("3-6 ship 消息含 use_skill/ship；全部门消息无 Skill(", () => {
   );
   for (const msg of allMsgs) {
     assert(
-      !msg.includes("Skill("),
+      !/\bSkill\(/.test(msg),
       `消息不应含 Skill( 调用：\n${msg.slice(0, 150)}`,
     );
   }
@@ -218,17 +218,14 @@ test("3-7 CC client → 消息含 Skill 工具，不含 use_skill", () => {
   const r = nextGateToInject(b);
   assert(r !== null, "plan_review 应触发注入");
   assert(
-    r.message.includes("Skill 工具"),
+    /Skill\s+工具/.test(r.message),
     `CC 消息应含 Skill 工具: ${r.message.slice(0, 120)}`,
   );
   assert(
-    !r.message.includes("use_skill"),
+    !/\buse_skill\b/.test(r.message),
     `CC 消息不应含 use_skill: ${r.message.slice(0, 120)}`,
   );
 });
-
-// ─── 结果 ─────────────────────────────────────────────────────────────────────
-summarize();
 
 // ─── 扩展用例（Phase 2）─────────────────────────────────────────────────────
 

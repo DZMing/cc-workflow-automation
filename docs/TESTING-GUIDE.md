@@ -9,9 +9,9 @@
 | C1       | Hash Consistency    | 12           | 路径 hash 计算、symlink 归一化、git worktree |
 | C2       | Context Proxy       | 10           | 上下文代理、session 管理、状态机             |
 | C3       | Instruction Strings | 10           | 质量门指令注入、多语言、编码转义             |
-| C4       | Quality FSM         | 11           | 状态机转移、lease/epoch、escalation          |
+| C4       | Quality FSM         | 14           | 状态机转移、lease/epoch、escalation          |
 | C5       | Integration         | 3            | 端到端集成、真实场景验证                     |
-| **总计** |                     | **56 tests** | **100% pass rate**                           |
+| **总计** |                     | **49 tests** | **100% pass rate**                           |
 
 ## 🚀 快速开始
 
@@ -24,11 +24,12 @@
 
 ```bash
 cd cc工作流自动化优化/tests
-npm install
 bash run-all.sh
 ```
 
-**期望结果**：`ALL SUITES PASSED — 56/56 tests`
+> **注意**: 无需 `npm install`，项目无外部依赖。
+
+**期望结果**：`ALL SUITES PASSED (5 suites)`
 
 ## 🧪 分模块运行
 
@@ -44,8 +45,8 @@ node test-c5-integration-smoke.js  # 集成测试
 
 - [项目概览](../README.md)
 - [项目状态](../.planning/PROJECT-STATUS.md)
-- [架构文档](./ARCHITECTURE.md)
+- [架构概览](../CLAUDE.md#架构概览)
 
 ---
 
-**更新**：2026-04-03 | **状态**：Production Ready ✅
+**更新**：2026-04-05 | **状态**：Production Ready ✅

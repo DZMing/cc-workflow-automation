@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// test-c2-context-proxy.js — C2: toolCallCount 启发式 + session 隔离（6 用例）
+// test-c2-context-proxy.js — C2: toolCallCount 启发式 + session 隔离（10 用例）
 "use strict";
 
 const fs = require("fs");
@@ -7,6 +7,10 @@ const path = require("path");
 
 const {
   HOOKS_DIR,
+  PROXY_WARN,
+  PROXY_CRITICAL,
+  WARNING_THRESHOLD,
+  CRITICAL_THRESHOLD,
   test,
   assert,
   assertEqual,
@@ -125,11 +129,7 @@ test("2-2 session 切换重置（s1×3 → s2×1 → count=1）", () => {
 });
 
 // 用例 3-5：纯逻辑测试 — 复现 checkContextWarning proxy 分支阈值判断
-// 阈值常量（与 forge-context-bridge.js 一致）
-const PROXY_WARN = 200;
-const PROXY_CRITICAL = 350;
-const WARNING_THRESHOLD = 35;
-const CRITICAL_THRESHOLD = 25;
+// 阈值常量从 test-helpers.js 导入（与 forge-context-bridge.js loadForgeConfig() 同源）
 
 function proxyRemaining(count) {
   if (count < PROXY_WARN) return null;
@@ -279,68 +279,83 @@ test("2-8 CC proxy skip：CC client 不触发 proxy 上下文告警", () => {
   }
 });
 
-// ─── 结果 ─────────────────────────────────────────────────────────────────────
-summarize();
-
 // ─── 扩展用例（Phase 2）─────────────────────────────────────────────────────
 
-// 用例 9（新增）：多个并发 session 且 toolCallCount 独立追踪
-test("2-9 多个并发 session toolCallCount 独立", () => {
-  const tmp = cleanupForgeTmpDir(mkForgeTmpDir("c2-concurrent"));
+// 用例 9（重写）：两个不同 session 交替调用 hook，各自 toolCallCount 正确
+test("2-9 多 session 交替调用 hook，toolCallCount 正确", () => {
+  const tmp = setupForgeTmpDir();
   try {
-    const state = { toolCallCount: {} };
+    const stdinA = {
+      cwd: tmp,
+      session_id: "sess-a",
+      tool_name: "Read",
+      tool_input: {},
+      tool_response: {},
+    };
+    const stdinB = {
+      cwd: tmp,
+      session_id: "sess-b",
+      tool_name: "Bash",
+      tool_input: {},
+      tool_response: {},
+    };
 
-    // Session A：执行 3 次工具调用
-    const sessionA = "session-a";
-    state.toolCallCount[sessionA] = 0;
-    for (let i = 0; i < 3; i++) {
-      state.toolCallCount[sessionA]++;
-    }
+    // A 调 2 次
+    spawnHook(CONTEXT_BRIDGE, stdinA);
+    spawnHook(CONTEXT_BRIDGE, stdinA);
 
-    // Session B：执行 2 次工具调用（同时进行）
-    const sessionB = "session-b";
-    state.toolCallCount[sessionB] = 0;
-    for (let i = 0; i < 2; i++) {
-      state.toolCallCount[sessionB]++;
-    }
+    // B 调 1 次（session 切换 → count 重置为 1）
+    spawnHook(CONTEXT_BRIDGE, stdinB);
 
-    // Session A 和 B 的计数应独立
-    assertEqual(state.toolCallCount[sessionA], 3, "Session A 应有 3 次调用");
-    assertEqual(state.toolCallCount[sessionB], 2, "Session B 应有 2 次调用");
+    // A 再调 1 次（session 切换回 → count 重置为 1）
+    spawnHook(CONTEXT_BRIDGE, stdinA);
+
+    const root = fs.realpathSync(getRealRoot(tmp));
+    const bridge = JSON.parse(
+      fs.readFileSync(getBridgePathForDir(root), "utf8"),
+    );
+    // 最后一次是 sess-a，session 切换 → count=1
+    const sanitized = shared.sanitizeSessionId("sess-a");
     assertEqual(
-      state.toolCallCount[sessionA] !== state.toolCallCount[sessionB],
-      true,
-      "不同 session 的计数应独立",
+      bridge.contextProxy.sessionId,
+      sanitized,
+      `sessionId 应为 ${sanitized}`,
+    );
+    assertEqual(
+      bridge.contextProxy.toolCallCount,
+      1,
+      `session 切换后 toolCallCount 应为 1, got ${bridge.contextProxy.toolCallCount}`,
     );
   } finally {
     cleanupForgeTmpDir(tmp);
   }
 });
 
-// 用例 10（新增）：Context proxy 状态机转移（idle → working → check → idle）
-test("2-10 Context proxy 状态机：idle → working → check → idle", () => {
-  const tmp = cleanupForgeTmpDir(mkForgeTmpDir("c2-fsm"));
+// 用例 10（重写）：bridge.contextProxy 结构完整性验证
+test("2-10 bridge.contextProxy 结构完整性", () => {
+  const tmp = setupForgeTmpDir();
   try {
-    let state = "idle";
-
-    // 状态转移序列
-    // idle → working（开始执行）
-    state = "working";
-    assert(state === "working", "应转移到 working");
-
-    // working → check（完成任务，检查结果）
-    state = "check";
-    assert(state === "check", "应转移到 check");
-
-    // check → idle（重置）
-    state = "idle";
-    assert(state === "idle", "应返回 idle");
-
-    // 验证循环可重复
-    state = "working";
-    state = "check";
-    state = "idle";
-    assertEqual(state, "idle", "状态机应可循环");
+    spawnHook(CONTEXT_BRIDGE, {
+      cwd: tmp,
+      session_id: "struct-test",
+      tool_name: "Read",
+      tool_input: {},
+      tool_response: {},
+    });
+    const root = fs.realpathSync(getRealRoot(tmp));
+    const bridge = JSON.parse(
+      fs.readFileSync(getBridgePathForDir(root), "utf8"),
+    );
+    assert(bridge.contextProxy !== undefined, "contextProxy 应存在");
+    assert(
+      typeof bridge.contextProxy.sessionId === "string",
+      "sessionId 应为 string",
+    );
+    assert(
+      typeof bridge.contextProxy.toolCallCount === "number",
+      "toolCallCount 应为 number",
+    );
+    assert(bridge.contextProxy.toolCallCount >= 1, "toolCallCount 应 >= 1");
   } finally {
     cleanupForgeTmpDir(tmp);
   }

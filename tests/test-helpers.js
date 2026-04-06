@@ -13,6 +13,22 @@ const cp = require("child_process");
 
 const HOOKS_DIR = path.join(os.homedir(), ".claude", "hooks");
 
+// 阈值常量 — 来源：forge-context-bridge.js loadForgeConfig()
+// 读取 ~/.forge/config.json，与源文件保持同步，避免硬编码漂移
+const _forgeCfg = (() => {
+  try {
+    return JSON.parse(
+      fs.readFileSync(path.join(os.homedir(), ".forge", "config.json"), "utf8"),
+    );
+  } catch (_) {
+    return {};
+  }
+})();
+const PROXY_WARN = _forgeCfg.context_thresholds?.proxy_warning ?? 200;
+const PROXY_CRITICAL = _forgeCfg.context_thresholds?.proxy_critical ?? 350;
+const WARNING_THRESHOLD = _forgeCfg.context_thresholds?.warning ?? 35;
+const CRITICAL_THRESHOLD = _forgeCfg.context_thresholds?.critical ?? 25;
+
 // ─── 最小测试运行器 ────────────────────────────────────────────────────────────
 
 let passed = 0,
@@ -21,17 +37,6 @@ let passed = 0,
 function test(name, fn) {
   try {
     fn();
-    console.log(`  [PASS] ${name}`);
-    passed++;
-  } catch (e) {
-    console.log(`  [FAIL] ${name}\n         ${e.message}`);
-    failed++;
-  }
-}
-
-async function testAsync(name, fn) {
-  try {
-    await fn();
     console.log(`  [PASS] ${name}`);
     passed++;
   } catch (e) {
@@ -51,11 +56,13 @@ function assertEqual(a, b, m) {
     );
 }
 
+// summarize() 只打印统计，不退出进程
+// 每个测试文件应在末尾调用一次 summarize()，多次调用安全（不再 exit）
 function summarize() {
   console.log(
     `\n  共 ${passed + failed} 个用例 → ${passed} PASS, ${failed} FAIL`,
   );
-  process.exit(failed > 0 ? 1 : 0);
+  if (failed > 0) process.exitCode = 1;
 }
 
 // ─── 临时目录工具 ──────────────────────────────────────────────────────────────
@@ -75,6 +82,7 @@ function getRealRoot(dir) {
       .execFileSync("git", ["rev-parse", "--show-toplevel"], {
         cwd: dir,
         encoding: "utf8",
+        stdio: ["pipe", "pipe", "ignore"],
       })
       .trim();
   } catch (_) {
@@ -202,6 +210,7 @@ function makeFullBridge(overrides) {
       },
       ship: { status: "idle", epoch: null, leaseUntil: null, failCount: 0 },
     },
+    contextProxy: { sessionId: null, toolCallCount: 0 },
     context: { warningLevel: null, lastSaveAt: null },
     audit: { lastToolName: null, updatedAt: null },
   };
@@ -222,8 +231,11 @@ function makeFullBridge(overrides) {
 
 module.exports = {
   HOOKS_DIR,
+  PROXY_WARN,
+  PROXY_CRITICAL,
+  WARNING_THRESHOLD,
+  CRITICAL_THRESHOLD,
   test,
-  testAsync,
   assert,
   assertEqual,
   summarize,

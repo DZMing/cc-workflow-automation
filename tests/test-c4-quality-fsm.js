@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// test-c4-quality-fsm.js — 质量门 FSM 完整决策逻辑（11 用例）
+// test-c4-quality-fsm.js — 质量门 FSM 完整决策逻辑（14 用例）
 "use strict";
 
 const path = require("path");
@@ -198,6 +198,51 @@ test("4-11 未过期 lease → 跳过，不重复注入", () => {
   const r = nextGateToInject(b);
   // plan_review 在有效 lease 期间跳过，且无其他门满足触发条件 → null
   assert(r === null, `有效 lease 期间不应触发任何门, got ${r && r.name}`);
+});
+
+// 用例 12：failCount=2 不触发 escalation（仍可重试）
+test("4-12 failCount=2 不触发 escalation（仍可重试）", () => {
+  const b = makeFullBridge({
+    change: { planWrittenAt: "2026-01-01", changeEpoch: 1 },
+    gates: {
+      plan_review: {
+        status: "failed",
+        epoch: null,
+        leaseUntil: null,
+        failCount: 2,
+      },
+    },
+  });
+  const r = nextGateToInject(b);
+  assert(r !== null, "failCount=2 应重新触发（未达上限）");
+  assertEqual(r.name, "plan_review", `应为 plan_review, got ${r && r.name}`);
+});
+
+// 用例 13：非 Web 项目跳过 qa 门
+test("4-13 非 Web 项目跳过 qa 门", () => {
+  const b = makeFullBridge({
+    project: { isWeb: false },
+    change: { changeEpoch: 1 },
+    gates: {
+      tests: { status: "passed", epoch: 1 },
+      code_review: { status: "passed", epoch: 1 },
+    },
+  });
+  const r = nextGateToInject(b);
+  // 非 Web 项目不需要 QA，应跳到 ship 或 null
+  assert(
+    r === null || r.name !== "qa",
+    `非 Web 项目不应触发 qa, got ${r && r.name}`,
+  );
+});
+
+// 用例 14：gates 字段缺失 → 返回 null（不崩溃）
+test("4-14 gates 字段缺失 → 返回 null（不崩溃）", () => {
+  const b = makeFullBridge({});
+  delete b.gates;
+  const r = nextGateToInject(b);
+  // 无 gates 字段应安全返回 null，不应抛错
+  assert(r === null, `无 gates 应返回 null, got ${JSON.stringify(r)}`);
 });
 
 // ─── 结果 ─────────────────────────────────────────────────────────────────────

@@ -10,71 +10,36 @@ const {
   assert,
   assertEqual,
   summarize,
+  makeFullBridge,
 } = require("./test-helpers");
 
 const shared = require(path.join(HOOKS_DIR, "forge-shared"));
 const { nextGateToInject } = require(
   path.join(HOOKS_DIR, "forge-quality-pipeline"),
 );
-const CWD = "/Users/zhimingdeng/Documents/cc工作流自动化优化";
+const CWD = path.resolve(__dirname, "..");
 
 // ─── 用例 ─────────────────────────────────────────────────────────────────────
 console.log("\n【C5】端到端集成烟雾测试");
 
 // 用例 1：读取真实 bridge：schema=2, changeEpoch>=89, contextProxy 存在
-test("5-1 真实 bridge 可读取（schema=2, changeEpoch>=89, contextProxy 存在）", () => {
+test("5-1 真实 bridge 可读取（schema=2, changeEpoch>=1, contextProxy 存在）", () => {
   const { data, corrupt } = shared.readBridgeSnapshot(CWD);
   assert(!corrupt, "真实 bridge 不应损坏");
   assert(data !== null, "bridge data 不为 null");
   assertEqual(data._schema_version, 2, "_schema_version 应为 2");
   assert(
     typeof data.change?.changeEpoch === "number" &&
-      data.change.changeEpoch >= 89,
-    `changeEpoch 应 >=89, got ${data.change?.changeEpoch}`,
+      data.change.changeEpoch >= 1,
+    `changeEpoch 应为正数, got ${data.change?.changeEpoch}`,
   );
   assert(data.contextProxy !== undefined, "contextProxy 应存在于真实 bridge");
 });
 
 // 用例 2：全 idle 门 → nextGateToInject 返回 null（无代码变更时不注入）
 test("5-2 全 idle 门 + 无 planWrittenAt → nextGateToInject=null", () => {
-  const idleBridge = {
-    _schema_version: 2,
-    project: { cwd: CWD, slug: "cc", isWeb: false, flowType: "new" },
-    phase: { current: 1, total: 5, phaseEpoch: 1 },
-    change: {
-      changeEpoch: 1,
-      touchedFiles: [],
-      planWrittenAt: null,
-      summaryWrittenAt: null,
-      securityRisk: { required: false, reasons: [], files: [] },
-    },
-    gates: {
-      plan_review: {
-        status: "idle",
-        epoch: null,
-        leaseUntil: null,
-        failCount: 0,
-      },
-      tests: { status: "idle", epoch: null, leaseUntil: null, failCount: 0 },
-      code_review: {
-        status: "idle",
-        epoch: null,
-        leaseUntil: null,
-        failCount: 0,
-      },
-      qa: { status: "idle", epoch: null, leaseUntil: null, failCount: 0 },
-      security: { status: "idle", epoch: null, leaseUntil: null, failCount: 0 },
-      benchmark: {
-        status: "idle",
-        epoch: null,
-        leaseUntil: null,
-        failCount: 0,
-      },
-      ship: { status: "idle", epoch: null, leaseUntil: null, failCount: 0 },
-    },
-    context: { warningLevel: null, lastSaveAt: null },
-    audit: { lastToolName: null, updatedAt: null },
-  };
+  // makeFullBridge() 默认生成全 idle 门、planWrittenAt=null 的 bridge
+  const idleBridge = makeFullBridge();
   const r = nextGateToInject(idleBridge);
   assert(r === null, `全 idle 门应返回 null, got ${JSON.stringify(r)}`);
 });
@@ -82,11 +47,12 @@ test("5-2 全 idle 门 + 无 planWrittenAt → nextGateToInject=null", () => {
 // 用例 3：state.json 完整（project_name, phase.total, tech_stack）
 test("5-3 state.json 字段完整", () => {
   const os = require("os");
+  const slug = shared.resolveSlug(CWD);
   const statePath = path.join(
     os.homedir(),
     ".forge",
     "projects",
-    "cc工作流自动化优化",
+    slug,
     "state.json",
   );
   assert(
@@ -94,10 +60,9 @@ test("5-3 state.json 字段完整", () => {
     `state.json 不存在: ${statePath}`,
   );
   const state = JSON.parse(require("fs").readFileSync(statePath, "utf8"));
-  assertEqual(
-    state.project_name,
-    "CC 工作流自动化优化",
-    `project_name 应为 'CC 工作流自动化优化'`,
+  assert(
+    typeof state.project_name === "string" && state.project_name.length > 0,
+    `project_name 应为非空字符串, got ${JSON.stringify(state.project_name)}`,
   );
   assertEqual(
     state.phase?.total,

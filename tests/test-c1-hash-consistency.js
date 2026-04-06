@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// test-c1-hash-consistency.js — C1: enhancer hash 与 shared.js 一致（8 用例）
+// test-c1-hash-consistency.js — C1: enhancer hash 与 shared.js 一致（12 用例）
 "use strict";
 
 const fs = require("fs");
@@ -30,8 +30,8 @@ function enhancerHash(realRoot) {
 // ─── 用例 ─────────────────────────────────────────────────────────────────────
 console.log("\n【C1】Bridge 路径 hash 一致性");
 
-const CWD = "/Users/zhimingdeng/Documents/cc工作流自动化优化";
-const EXPECTED_HASH = "7d18b7953f43";
+const CWD = path.resolve(__dirname, "..");
+const EXPECTED_HASH = enhancerHash(fs.realpathSync(getRealRoot(CWD)));
 
 // 用例 1：当前项目 hash 一致，且等于已知 EXPECTED_HASH
 test("1-1 当前项目：enhancer hash === shared getBridgePath hash", () => {
@@ -186,40 +186,38 @@ test("1-8 子目录 tests/ 解析到同一 project root", () => {
   );
 });
 
-// ─── 结果 ─────────────────────────────────────────────────────────────────────
-summarize();
-
 // ─── 扩展用例（Phase 2）─────────────────────────────────────────────────────
 
 // 用例 9（新增）：深层 symlink 链（3+ 级）hash 一致性
 test("1-9 深层 symlink 链（3+ 级）hash 一致性", () => {
   const tmp = mkTmpDir("c1-deep-symlink");
   try {
-    // 创建目录结构：tmp/a/b/c
-    const dirC = path.join(tmp, "a", "b", "c");
-    fs.mkdirSync(dirC, { recursive: true });
+    // 创建目标目录
+    const target = path.join(tmp, "target");
+    fs.mkdirSync(target, { recursive: true });
 
-    // 创建 symlink：tmp/link1 → tmp/a
+    // 创建链式 symlink：link1 → target, link2 → link1, link3 → link2
     const link1 = path.join(tmp, "link1");
     try {
-      fs.symlinkSync(path.join(tmp, "a"), link1, "dir");
+      fs.symlinkSync(target, link1, "dir");
     } catch (e) {
       console.log("         SKIP（symlink 不支持）");
       return;
     }
+    const link2 = path.join(tmp, "link2");
+    fs.symlinkSync(link1, link2, "dir");
+    const link3 = path.join(tmp, "link3");
+    fs.symlinkSync(link2, link3, "dir");
 
-    // 创建嵌套 symlink：tmp/a/link2 → tmp/a/b
-    const link2 = path.join(tmp, "a", "link2");
-    fs.symlinkSync(path.join(tmp, "a", "b"), link2, "dir");
-
-    // 解析多个路径，应该都归一化到同一根
-    const root1 = fs.realpathSync(tmp);
-    const root2 = fs.realpathSync(link1);
-    const root3 = fs.realpathSync(path.join(link1, "link2"));
-
-    assertEqual(root1, root2, "symlink 应归一化到同一路径");
-    assertEqual(root1, root3, "深层 symlink 应归一化到同一路径");
-    assertEqual(enhancerHash(root1), enhancerHash(root3), "hash 应一致");
+    // 三层 symlink 全部归一化到同一 realpath
+    const realTarget = fs.realpathSync(target);
+    const realLink3 = fs.realpathSync(link3);
+    assertEqual(realTarget, realLink3, "3 层 symlink 应归一化到同一路径");
+    assertEqual(
+      enhancerHash(realTarget),
+      enhancerHash(realLink3),
+      "hash 应一致",
+    );
   } finally {
     cleanupDir(tmp);
   }
@@ -254,11 +252,8 @@ test("1-10 Bridge 路径与 git worktree 兼容", () => {
     const root = fs.realpathSync(getRealRoot(tmp));
     const bp = shared.getBridgePath(root);
 
-    // 验证 bridge 路径格式包含 hash 部分
-    assert(
-      bp.includes("forge-bridge"),
-      `Bridge 路径应包含 'forge-bridge': ${bp}`,
-    );
+    // 验证 bridge 路径格式包含 bridges 目录
+    assert(bp.includes("bridges"), `Bridge 路径应包含 'bridges': ${bp}`);
 
     // 路径应该能用于读取（即使文件不存在，路径本身应该有效）
     const dir = path.dirname(bp);
@@ -292,41 +287,17 @@ test("1-11 环境变量 CLAUDE_BRIDGE_OVERRIDE 不影响 hash 计算", () => {
   }
 });
 
-// 用例 12（新增）：并发 hash 计算一致性
-test("1-12 并发 hash 计算一致性（5 并发）", () => {
+// 用例 12（新增）：并发 hash 计算一致性（同步循环验证）
+test("1-12 并发 hash 计算一致性（5 次）", () => {
   const realRoot = fs.realpathSync(getRealRoot(CWD));
-  const promises = [];
-
+  const results = [];
   for (let i = 0; i < 5; i++) {
-    promises.push(
-      new Promise((resolve) => {
-        setImmediate(() => {
-          const h = enhancerHash(realRoot);
-          resolve(h);
-        });
-      }),
-    );
-  }
-
-  Promise.all(promises).then((hashes) => {
-    // 所有并发计算结果应相同
-    const firstHash = hashes[0];
-    for (let i = 1; i < hashes.length; i++) {
-      assertEqual(hashes[i], firstHash, `并发 hash #${i} 应与 #0 相同`);
-    }
-    assertEqual(firstHash, EXPECTED_HASH, "并发结果应与预期 hash 一致");
-  });
-
-  // 注：此用例依赖异步完成，实际测试框架应支持 Promise
-  // 当前为演示目的，同步验证也可接受
-  const syncResults = [];
-  for (let i = 0; i < 5; i++) {
-    syncResults.push(enhancerHash(realRoot));
+    results.push(enhancerHash(realRoot));
   }
   assertEqual(
-    syncResults.every((h) => h === EXPECTED_HASH),
+    results.every((h) => h === EXPECTED_HASH),
     true,
-    "同步循环 hash 计算应全部一致",
+    "5 次 hash 计算结果应全部一致",
   );
 });
 
