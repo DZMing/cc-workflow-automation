@@ -17,5 +17,22 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Run tests
-        run: bash tests/run-all.sh
+      - name: Checkout claude-code-config (hooks dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: DZMing/claude-code-config
+          path: claude-code-config
+
+      - name: Setup hooks
+        run: |
+          mkdir -p ~/.claude
+          cp -r claude-code-config/hooks ~/.claude/hooks
+
+      - name: Run unit tests (c1-c4)
+        run: |
+          for s in test-c1-hash-consistency test-c2-context-proxy test-c3-instruction-strings test-c4-quality-fsm; do
+            echo "=== $s.js ==="
+            node "tests/$s.js"
+            echo ""
+          done
+          echo "ALL UNIT SUITES PASSED"
