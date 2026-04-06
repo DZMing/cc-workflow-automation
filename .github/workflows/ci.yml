@@ -17,16 +17,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Checkout claude-code-config (hooks dependency)
-        uses: actions/checkout@v4
-        with:
-          repository: DZMing/claude-code-config
-          path: claude-code-config
-
-      - name: Setup hooks
+      - name: Setup hooks fixtures
         run: |
-          mkdir -p ~/.claude
-          cp -r claude-code-config/hooks ~/.claude/hooks
+          mkdir -p ~/.claude/hooks
+          cp test-fixtures/hooks/*.js ~/.claude/hooks/
 
       - name: Run unit tests (c1-c4)
         run: |
