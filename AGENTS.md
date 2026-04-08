@@ -29,3 +29,23 @@ This repository has no published history yet, so start clean. Use short, imperat
 ## Security & Agent Notes
 
 Treat `.claude/settings.local.json` as sensitive local configuration: do not add secrets, and do not widen permissions without a clear reason. If you work in a multi-agent flow, keep UI tasks separate from backend or automation logic, and prefer review before expanding tool access.
+
+## Codex Code Review Rules
+
+### Critical (must block PR)
+
+- Security: exposed secrets, tokens, or credentials in test fixtures or config
+- Test reliability: flaky tests, tests that depend on external state or timing
+- Breaking changes: removing or renaming test cases without justification
+
+### High (should fix before merge)
+
+- Test coverage: new hook logic without corresponding test case
+- Test isolation: tests that modify shared state without cleanup
+- Error messages: unclear assertion messages that make failures hard to diagnose
+
+### Medium (suggest improvements)
+
+- Test naming: should describe the behavior being verified
+- DRY: extract shared test setup into helpers when duplicated 3+ times
+- Documentation: complex test scenarios should have a brief comment explaining intent
